@@ -45,6 +45,15 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(uploadsPath));
 
+// ===== Request logger (temporário, para debug) =====
+app.use((req, res, next) => {
+  console.log(`➡️ ${new Date().toISOString()} ${req.method} ${req.originalUrl} from ${req.ip}`);
+  // descomente para logar headers/body (atenção: pode vazar segredos nos logs)
+  // console.log("Headers:", req.headers);
+  // console.log("Body:", req.body);
+  next();
+});
+
 // ===============================
 // ROTAS
 // ===============================
@@ -57,6 +66,32 @@ app.use("/api/alertas", alertaRoutes);
 // CONEXÃO MONGODB
 // ===============================
 connectDB();
+
+// ===== Endpoint de debug que lista as rotas ativas =====
+app.get("/__routes", (req, res) => {
+  try {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+      if (middleware.route) {
+        // rota direta registrada em app
+        const methods = Object.keys(middleware.route.methods).join(",").toUpperCase();
+        routes.push(`${methods} ${middleware.route.path}`);
+      } else if (middleware.name === "router" && middleware.handle && middleware.handle.stack) {
+        // rotas registradas via router (app.use('/x', router))
+        middleware.handle.stack.forEach((handler) => {
+          if (handler.route) {
+            const methods = Object.keys(handler.route.methods).join(",").toUpperCase();
+            // tentamos inferir a rota completa mostrando a path interna
+            routes.push(`${methods} ${handler.route.path}`);
+          }
+        });
+      }
+    });
+    res.json({ routes });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao listar rotas", detail: err.message });
+  }
+});
 
 // ===============================
 // MQTT – ASSINANDO 10 SENSORES
@@ -77,13 +112,11 @@ mqttClient.on("connect", () => {
 // ===============================
 mqttClient.on("message", async (topic, message) => {
   try {
-   
     const data = JSON.parse(message.toString());
     console.log("📩 Telemetria recebida:", topic, data);
 
-    
     const parts = topic.split("/");
-    const sensorId = Number(parts[2]); 
+    const sensorId = Number(parts[2]);
 
     // ===============================
     // SALVAR TELEMETRIA NO BANCO
@@ -93,43 +126,39 @@ mqttClient.on("message", async (topic, message) => {
       machine: data.machine,
       type: data.type,
       value: data.value,
-      status: data.status,      
+      status: data.status,
       minLimit: data.minLimit,
       warnLimit: data.warnLimit,
       maxLimit: data.maxLimit,
-      timestamp: new Date(data.timestamp)
+      timestamp: new Date(data.timestamp),
     });
 
     console.log(`📦 Telemetria salva: Sensor ${sensorId}: ${saved.value}`);
 
     // ===============================
     // ALERTAS AUTOMÁTICOS
-    // ===============================       
+    // ===============================
     const alerta = {
       sensor: `Sensor ${sensorId}`,
       maquina: data.machine,
-      status: data.status, 
+      status: data.status,
       mensagem: "",
       tipo: data.type,
       valor: data.value,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     if (data.status === "CRITICA") {
       alerta.mensagem = `${data.type} CRÍTICA — acima do limite máximo!`;
-    } 
-    else if (data.status === "MEDIA") {
+    } else if (data.status === "MEDIA") {
       alerta.mensagem = `${data.type} em ALERTA — acima do limite de atenção.`;
-    } 
-    else {
+    } else {
       alerta.mensagem = `${data.type} normalizada.`;
     }
 
-   
     await Alerta.create(alerta);
 
     console.log(`🚨 Alerta registrado: Sensor ${sensorId} — ${data.status}`);
-
   } catch (error) {
     console.error("❌ Erro ao processar MQTT:", error);
   }
@@ -139,6 +168,4 @@ mqttClient.on("message", async (topic, message) => {
 // START SERVER
 // ===============================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>
-  console.log(`🌍 Servidor rodando na porta ${PORT}`)
-);
+app.listen(PORT, () => console.log(`🌍 Servidor rodando na porta ${PORT}`));
