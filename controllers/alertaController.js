@@ -1,35 +1,37 @@
+// controllers/alertaController.js (substitua apenas a função listarAlertas)
 import Alerta from "../models/alertaModel.js";
-import Formulario from "../models/Formulario.js"; 
+import Formulario from "../models/Formulario.js"; // deixe como está se o arquivo existir
 
-// ==========================
-// LISTAR ALERTAS COM FILTROS
-// ==========================
 export const listarAlertas = async (req, res) => {
   try {
+    // logs iniciais para debug
+    console.log("➡️ listarAlertas called with query:", req.query);
+
+    // Aceita tanto ?periodo= quanto ?period= (robustez)
     const {
       maquina,
       sensor,
       sensorType,
       status,
       busca,
-      periodo,     
       page = 1,
       limit = 10,
     } = req.query;
 
-    
+    // leitura segura do periodo (evita ReferenceError se nome chegar diferente)
+    const periodo = req.query.periodo ?? req.query.period ?? null;
+
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 10;
     const skip = (pageNum - 1) * limitNum;
 
     const filtros = {};
-
     if (maquina) filtros.maquina = maquina;
     if (sensor) filtros.sensor = sensor;
     if (sensorType) filtros.type = sensorType;
     if (status) filtros.status = status;
 
-    // FILTRO POR PERÍODO 
+    // FILTRO POR PERÍODO (uso seguro do periodo)
     if (periodo) {
       const agora = new Date();
       const inicio = new Date();
@@ -59,9 +61,7 @@ export const listarAlertas = async (req, res) => {
           break;
 
         default:
-          // Se quiser, você pode retornar 400 para período inválido:
-          // return res.status(400).json({ message: "Parâmetro 'periodo' inválido." });
-          // Aqui apenas ignora valores desconhecidos.
+          console.log("⚠️ listarAlertas: periodo desconhecido:", periodo);
           break;
       }
     }
@@ -97,38 +97,10 @@ export const listarAlertas = async (req, res) => {
     });
   } catch (erro) {
     console.error("Erro listar alertas:", erro);
-    return res.status(500).json({ erro: "Erro ao listar alertas.", detail: erro.message });
-  }
-};
-
-
-
-
-// ==============================
-// ENVIAR FORMULÁRIO DE MANUTENÇÃO
-// ==============================
-export const enviarFormulario = async (req, res) => {
-  try {
-    const { responsavel, falha, descricao } = req.body;
-
-    if (!responsavel || !falha || !descricao) {
-      return res.status(400).json({ message: "Preencha todos os campos." });
-    }
-
-    const form = await Formulario.create({
-      alertaId: req.params.id,
-      responsavel,
-      falha,
-      descricao,
+    console.error("Erro listar alertas - stack:", erro.stack);
+    return res.status(500).json({
+      erro: "Erro ao listar alertas.",
+      detail: erro.message, // temporário só para debug no Postman; remova em produção se quiser
     });
-
-    return res.json({
-      message: "Formulário enviado com sucesso!",
-      form,
-    });
-
-  } catch (erro) {
-    console.error("Erro ao enviar formulário:", erro);
-    return res.status(500).json({ erro: "Erro ao enviar formulário." });
   }
 };
