@@ -1,13 +1,11 @@
-// controllers/alertaController.js (substitua apenas a função listarAlertas)
+// controllers/alertaController.js (substitua apenas listarAlertas)
 import Alerta from "../models/alertaModel.js";
-import Formulario from "../models/Formulario.js"; // deixe como está se o arquivo existir
+import Formulario from "../models/Formulario.js";
 
 export const listarAlertas = async (req, res) => {
   try {
-    // logs iniciais para debug
     console.log("➡️ listarAlertas called with query:", req.query);
 
-    // Aceita tanto ?periodo= quanto ?period= (robustez)
     const {
       maquina,
       sensor,
@@ -18,7 +16,7 @@ export const listarAlertas = async (req, res) => {
       limit = 10,
     } = req.query;
 
-    // leitura segura do periodo (evita ReferenceError se nome chegar diferente)
+    // leitura segura do periodo (evita ReferenceError)
     const periodo = req.query.periodo ?? req.query.period ?? null;
 
     const pageNum = Number(page) || 1;
@@ -31,7 +29,6 @@ export const listarAlertas = async (req, res) => {
     if (sensorType) filtros.type = sensorType;
     if (status) filtros.status = status;
 
-    // FILTRO POR PERÍODO (uso seguro do periodo)
     if (periodo) {
       const agora = new Date();
       const inicio = new Date();
@@ -66,7 +63,6 @@ export const listarAlertas = async (req, res) => {
       }
     }
 
-    // BUSCA GERAL
     if (busca) {
       filtros.$or = [
         { mensagem: { $regex: busca, $options: "i" } },
@@ -100,7 +96,7 @@ export const listarAlertas = async (req, res) => {
     console.error("Erro listar alertas - stack:", erro.stack);
     return res.status(500).json({
       erro: "Erro ao listar alertas.",
-      detail: erro.message, // temporário só para debug no Postman; remova em produção se quiser
+      detail: erro.message, // temporário para debug
     });
   }
 };
