@@ -1,68 +1,67 @@
-// controllers/alertaController.js (substitua apenas listarAlertas)
-import Alerta from "../models/alertaModel.js";
-import Formulario from "../models/Formulario.js";
-
+// ==========================
+// LISTAR ALERTAS COM FILTROS
+// ==========================
 export const listarAlertas = async (req, res) => {
   try {
-    console.log("➡️ listarAlertas called with query:", req.query);
-
     const {
       maquina,
       sensor,
       sensorType,
       status,
       busca,
+      periodo,   
       page = 1,
       limit = 10,
     } = req.query;
-
-    // leitura segura do periodo (evita ReferenceError)
-    const periodo = req.query.periodo ?? req.query.period ?? null;
 
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 10;
     const skip = (pageNum - 1) * limitNum;
 
     const filtros = {};
+
     if (maquina) filtros.maquina = maquina;
     if (sensor) filtros.sensor = sensor;
     if (sensorType) filtros.type = sensorType;
     if (status) filtros.status = status;
 
-   // FILTRO POR PERÍODO 
-if (req.query.periodo) {
-  const periodo = req.query.periodo;  // <-- GARANTE QUE SEMPRE EXISTA
-  const inicio = new Date();
+    // ======================
+    // FILTRO POR PERÍODO
+    // ======================
+    if (periodo) {
+      const agora = new Date();
+      const inicio = new Date();
 
-  switch (periodo) {
-    case "hoje":
-      inicio.setHours(0, 0, 0, 0);
-      filtros.timestamp = { $gte: inicio };
-      break;
+      switch (periodo) {
+        case "hoje":
+          inicio.setHours(0, 0, 0, 0);
+          filtros.timestamp = { $gte: inicio };
+          break;
 
-    case "ontem":
-      inicio.setDate(inicio.getDate() - 1);
-      inicio.setHours(0, 0, 0, 0);
-      const fimOntem = new Date(inicio);
-      fimOntem.setHours(23, 59, 59, 999);
-      filtros.timestamp = { $gte: inicio, $lte: fimOntem };
-      break;
+        case "ontem":
+          inicio.setDate(inicio.getDate() - 1);
+          inicio.setHours(0, 0, 0, 0);
+          const fimOntem = new Date(inicio);
+          fimOntem.setHours(23, 59, 59, 999);
+          filtros.timestamp = { $gte: inicio, $lte: fimOntem };
+          break;
 
-    case "7dias":
-      inicio.setDate(inicio.getDate() - 7);
-      filtros.timestamp = { $gte: inicio };
-      break;
+        case "7dias":
+          inicio.setDate(inicio.getDate() - 7);
+          filtros.timestamp = { $gte: inicio };
+          break;
 
-    case "30dias":
-      inicio.setDate(inicio.getDate() - 30);
-      filtros.timestamp = { $gte: inicio };
-      break;
+        case "30dias":
+          inicio.setDate(inicio.getDate() - 30);
+          filtros.timestamp = { $gte: inicio };
+          break;
 
-    default:
-      break;
-  }
-}
+        default:
+          break;
+      }
+    }
 
+    // BUSCA GERAL
     if (busca) {
       filtros.$or = [
         { mensagem: { $regex: busca, $options: "i" } },
@@ -91,12 +90,9 @@ if (req.query.periodo) {
       page: pageNum,
       limit: limitNum,
     });
+
   } catch (erro) {
     console.error("Erro listar alertas:", erro);
-    console.error("Erro listar alertas - stack:", erro.stack);
-    return res.status(500).json({
-      erro: "Erro ao listar alertas.",
-      detail: erro.message, // temporário para debug
-    });
+    return res.status(500).json({ erro: "Erro ao listar alertas.", detail: erro.message });
   }
 };
