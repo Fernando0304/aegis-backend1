@@ -1,3 +1,7 @@
+// controllers/alertaController.js
+import Alerta from "../models/alertaModel.js";
+import Formulario from "../models/Formulario.js";
+
 // ==========================
 // LISTAR ALERTAS COM FILTROS
 // ==========================
@@ -9,7 +13,7 @@ export const listarAlertas = async (req, res) => {
       sensorType,
       status,
       busca,
-      periodo,   
+      periodo,
       page = 1,
       limit = 10,
     } = req.query;
@@ -57,6 +61,7 @@ export const listarAlertas = async (req, res) => {
           break;
 
         default:
+          // ignora se valor desconhecido
           break;
       }
     }
@@ -71,10 +76,7 @@ export const listarAlertas = async (req, res) => {
     }
 
     const [alertas, total] = await Promise.all([
-      Alerta.find(filtros)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(limitNum),
+      Alerta.find(filtros).sort({ timestamp: -1 }).skip(skip).limit(limitNum),
       Alerta.countDocuments(filtros),
     ]);
 
@@ -90,9 +92,37 @@ export const listarAlertas = async (req, res) => {
       page: pageNum,
       limit: limitNum,
     });
-
+    
   } catch (erro) {
     console.error("Erro listar alertas:", erro);
     return res.status(500).json({ erro: "Erro ao listar alertas.", detail: erro.message });
+  }
+};
+
+// ==============================
+// ENVIAR FORMULÁRIO DE MANUTENÇÃO
+// ==============================
+export const enviarFormulario = async (req, res) => {
+  try {
+    const { responsavel, falha, descricao } = req.body;
+
+    if (!responsavel || !falha || !descricao) {
+      return res.status(400).json({ message: "Preencha todos os campos." });
+    }
+
+    const form = await Formulario.create({
+      alertaId: req.params.id,
+      responsavel,
+      falha,
+      descricao,
+    });
+
+    return res.json({
+      message: "Formulário enviado com sucesso!",
+      form,
+    });
+  } catch (erro) {
+    console.error("Erro ao enviar formulário:", erro);
+    return res.status(500).json({ erro: "Erro ao enviar formulário." });
   }
 };
