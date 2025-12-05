@@ -3,11 +3,20 @@ import mongoose from "mongoose";
 import Alerta from "../models/alertaModel.js";
 import Formulario from "../models/Formulario.js";
 
+// lista de períodos válidos
+const PERIODOS_VALIDOS = ["hoje", "ontem", "7dias", "30dias"];
+
 // ==========================
-// LISTAR ALERTAS COM FILTROS (SEM FILTRO 'periodo')
+// LISTAR ALERTAS COM FILTROS
 // ==========================
 export const listarAlertas = async (req, res) => {
   try {
+    // leitura segura do periodo (pode vir por query ou params)
+    const periodoRaw = req.query?.periodo ?? req.params?.periodo ?? null;
+    // normaliza: transforma em string e remove espaços; garante que "false"/"null"/"" não sejam considerados válidos
+    const periodo =
+      typeof periodoRaw === "string" ? periodoRaw.trim().toLowerCase() : null;
+
     const {
       maquina,
       sensor,
@@ -29,8 +38,45 @@ export const listarAlertas = async (req, res) => {
     if (sensorType) filtros.type = sensorType;
     if (status) filtros.status = status;
 
-    // ======= (REMOVIDO) filtro por periodo =======
-    // O filtro 'periodo' foi removido do backend conforme solicitado.
+    // ======================
+    // FILTRO POR PERÍODO (aplica somente se for um período válido)
+    // ======================
+    if (periodo && PERIODOS_VALIDOS.includes(periodo)) {
+      const agora = new Date();
+      const inicio = new Date();
+
+      switch (periodo) {
+        case "hoje":
+          inicio.setHours(0, 0, 0, 0);
+          filtros.timestamp = { $gte: inicio };
+          break;
+
+        case "ontem":
+          inicio.setDate(inicio.getDate() - 1);
+          inicio.setHours(0, 0, 0, 0);
+          {
+            const fimOntem = new Date(inicio);
+            fimOntem.setHours(23, 59, 59, 999);
+            filtros.timestamp = { $gte: inicio, $lte: fimOntem };
+          }
+          break;
+
+        case "7dias":
+          inicio.setDate(inicio.getDate() - 7);
+          filtros.timestamp = { $gte: inicio };
+          break;
+
+        case "30dias":
+          inicio.setDate(inicio.getDate() - 30);
+          filtros.timestamp = { $gte: inicio };
+          break;
+
+        default:
+          // não chega aqui por causa do includes(), mas mantemos por segurança
+          break;
+      }
+    }
+    // se periodo for inválido/ausente, simplesmente não aplica filtro de período
 
     // BUSCA GERAL
     if (busca) {
@@ -82,7 +128,7 @@ export const enviarFormulario = async (req, res) => {
       return res.status(400).json({ message: "ID do alerta inválido." });
     }
 
-    // opcional: checar se o alerta existe
+    // checar se o alerta existe
     const alertaExistente = await Alerta.findById(alertaId).select("_id");
     if (!alertaExistente) {
       return res.status(404).json({ message: "Alerta não encontrado." });
