@@ -1,4 +1,5 @@
 // controllers/alertaController.js
+import mongoose from "mongoose";
 import Alerta from "../models/alertaModel.js";
 import Formulario from "../models/Formulario.js";
 
@@ -7,13 +8,15 @@ import Formulario from "../models/Formulario.js";
 // ==========================
 export const listarAlertas = async (req, res) => {
   try {
+    // leitura segura de 'periodo' (pode vir por querystring ou params)
+    const periodo = req.query?.periodo ?? req.params?.periodo ?? null;
+
     const {
       maquina,
       sensor,
       sensorType,
       status,
       busca,
-      periodo,
       page = 1,
       limit = 10,
     } = req.query;
@@ -45,9 +48,11 @@ export const listarAlertas = async (req, res) => {
         case "ontem":
           inicio.setDate(inicio.getDate() - 1);
           inicio.setHours(0, 0, 0, 0);
-          const fimOntem = new Date(inicio);
-          fimOntem.setHours(23, 59, 59, 999);
-          filtros.timestamp = { $gte: inicio, $lte: fimOntem };
+          {
+            const fimOntem = new Date(inicio);
+            fimOntem.setHours(23, 59, 59, 999);
+            filtros.timestamp = { $gte: inicio, $lte: fimOntem };
+          }
           break;
 
         case "7dias":
@@ -105,19 +110,31 @@ export const listarAlertas = async (req, res) => {
 export const enviarFormulario = async (req, res) => {
   try {
     const { responsavel, falha, descricao } = req.body;
+    const alertaId = req.params.id;
 
     if (!responsavel || !falha || !descricao) {
       return res.status(400).json({ message: "Preencha todos os campos." });
     }
 
+    // valida formato do id (evita exceptions do mongoose)
+    if (!mongoose.isValidObjectId(alertaId)) {
+      return res.status(400).json({ message: "ID do alerta inválido." });
+    }
+
+    // opcional: checar se o alerta existe
+    const alertaExistente = await Alerta.findById(alertaId).select("_id");
+    if (!alertaExistente) {
+      return res.status(404).json({ message: "Alerta não encontrado." });
+    }
+
     const form = await Formulario.create({
-      alertaId: req.params.id,
+      alertaId,
       responsavel,
       falha,
       descricao,
     });
 
-    return res.json({
+    return res.status(201).json({
       message: "Formulário enviado com sucesso!",
       form,
     });
